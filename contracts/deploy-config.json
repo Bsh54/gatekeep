@@ -1,0 +1,9 @@
+{
+  "network": "monad-testnet",
+  "chainId": 10143,
+  "rpcUrl": "https://testnet-rpc.monad.xyz",
+  "deployer": "0x92f790bEA8a301a708010e63679f5123681D0Ce4",
+  "publicGoods": "0x4aEbc0bACaC7C7d32D718aE4B76f2b025D9e6B26",
+  "escrowAddress": "PENDING_DEPLOYMENT",
+  "notes": "publicGoods is immutable in the contract. On testnet, deposits are valueless test MON. On mainnet this would point to a governance-selected public-goods fund."
+}
