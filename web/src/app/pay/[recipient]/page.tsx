@@ -3,9 +3,10 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { parseEther, isAddress } from "viem";
+import { parseEther, isAddress, formatEther } from "viem";
 import {
   useAccount,
+  useBalance,
   useChainId,
   useSwitchChain,
   useWriteContract,
@@ -35,8 +36,11 @@ export default function PayPage({
   const [amount, setAmount] = useState("0.5");
   const [copied, setCopied] = useState(false);
 
-  function copyRecipient() {
-    navigator.clipboard?.writeText(recipient);
+  const { data: balance } = useBalance({ address });
+
+  function copyMyAddress() {
+    if (!address) return;
+    navigator.clipboard?.writeText(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -113,38 +117,8 @@ export default function PayPage({
           <div style={{ color: "var(--muted)", fontSize: ".85rem" }}>
             {mid ? "Deliver your email to" : "You're about to reach"}
           </div>
-          <div
-            style={{
-              display: "flex",
-              gap: ".5rem",
-              alignItems: "center",
-              marginBottom: "1rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <code
-              className="mono"
-              style={{
-                flex: 1,
-                minWidth: 180,
-                background: "var(--bg)",
-                border: "1px solid var(--border)",
-                borderRadius: 10,
-                padding: ".55rem .7rem",
-                fontSize: ".78rem",
-                overflow: "auto",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {recipient}
-            </code>
-            <button
-              className="btn btn-ghost"
-              style={{ padding: ".55rem .8rem", fontSize: ".82rem" }}
-              onClick={copyRecipient}
-            >
-              {copied ? "Copied ✓" : "Copy address"}
-            </button>
+          <div className="mono" style={{ fontSize: ".95rem", marginBottom: "1rem" }}>
+            {recipient.slice(0, 10)}…{recipient.slice(-8)}
           </div>
 
           {mid ? (
@@ -203,6 +177,56 @@ export default function PayPage({
             {RESPONSE_WINDOW_HOURS}h · goes to public goods only if they mark it
             spam.
           </div>
+
+          {isConnected && address && (
+            <div
+              style={{
+                marginBottom: "1rem",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: ".7rem .9rem",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: ".5rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+                  YOUR WALLET — top it up with MON to pay
+                </span>
+                <span className="mono" style={{ fontSize: ".8rem", color: "var(--green)" }}>
+                  {balance ? Number(formatEther(balance.value)).toFixed(3) : "0.000"} MON
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: ".5rem", alignItems: "center", marginTop: ".5rem" }}>
+                <code
+                  className="mono"
+                  style={{
+                    flex: 1,
+                    minWidth: 160,
+                    fontSize: ".76rem",
+                    overflow: "auto",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {address}
+                </code>
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: ".45rem .7rem", fontSize: ".8rem" }}
+                  onClick={copyMyAddress}
+                >
+                  {copied ? "Copied ✓" : "Copy"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {!isConnected ? (
             <div style={{ textAlign: "center" }}>
