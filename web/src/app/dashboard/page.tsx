@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [emails, setEmails] = useState<EmailMsg[]>([]);
   const [claiming, setClaiming] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const loadEmail = useCallback(async () => {
     if (!address) return;
@@ -160,6 +161,13 @@ export default function Dashboard() {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  function copyLink() {
+    if (!address) return;
+    navigator.clipboard?.writeText(address);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 1500);
+  }
+
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "1.25rem 1.25rem 3rem" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -226,6 +234,34 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Wallet address (for funding) */}
+          <div className="card" style={{ padding: "1.1rem 1.2rem", marginBottom: "1rem" }}>
+            <div style={{ fontSize: ".75rem", color: "var(--muted)", marginBottom: ".5rem" }}>
+              YOUR WALLET ADDRESS — copy it to top up with MON
+            </div>
+            <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap", alignItems: "center" }}>
+              <code
+                className="mono"
+                style={{
+                  flex: 1,
+                  minWidth: 220,
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                  padding: ".6rem .8rem",
+                  fontSize: ".82rem",
+                  overflow: "auto",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {address}
+              </code>
+              <button className="btn btn-brass" onClick={copyLink}>
+                {copiedLink ? "Copied ✓" : "Copy address"}
+              </button>
+            </div>
           </div>
 
           {/* Stats */}
