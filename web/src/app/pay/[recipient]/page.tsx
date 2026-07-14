@@ -33,6 +33,13 @@ export default function PayPage({
 
   const [message, setMessage] = useState("");
   const [amount, setAmount] = useState("0.5");
+  const [copied, setCopied] = useState(false);
+
+  function copyRecipient() {
+    navigator.clipboard?.writeText(recipient);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
 
   // When the deposit confirms, release the held email into the recipient's inbox.
   useEffect(() => {
@@ -106,8 +113,38 @@ export default function PayPage({
           <div style={{ color: "var(--muted)", fontSize: ".85rem" }}>
             {mid ? "Deliver your email to" : "You're about to reach"}
           </div>
-          <div className="mono" style={{ fontSize: ".95rem", marginBottom: "1rem" }}>
-            {recipient.slice(0, 10)}…{recipient.slice(-8)}
+          <div
+            style={{
+              display: "flex",
+              gap: ".5rem",
+              alignItems: "center",
+              marginBottom: "1rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <code
+              className="mono"
+              style={{
+                flex: 1,
+                minWidth: 180,
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: ".55rem .7rem",
+                fontSize: ".78rem",
+                overflow: "auto",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {recipient}
+            </code>
+            <button
+              className="btn btn-ghost"
+              style={{ padding: ".55rem .8rem", fontSize: ".82rem" }}
+              onClick={copyRecipient}
+            >
+              {copied ? "Copied ✓" : "Copy address"}
+            </button>
           </div>
 
           {mid ? (
