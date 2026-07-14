@@ -104,22 +104,41 @@ export default function PayPage({
       ) : (
         <div className="card" style={{ padding: "1.25rem" }}>
           <div style={{ color: "var(--muted)", fontSize: ".85rem" }}>
-            You&apos;re about to reach
+            {mid ? "Deliver your email to" : "You're about to reach"}
           </div>
           <div className="mono" style={{ fontSize: ".95rem", marginBottom: "1rem" }}>
             {recipient.slice(0, 10)}…{recipient.slice(-8)}
           </div>
 
-          <label style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-            Your message
-          </label>
-          <textarea
-            className="field"
-            style={{ margin: ".4rem 0 1rem" }}
-            placeholder="Say why you're worth their time…"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
+          {mid ? (
+            <div
+              style={{
+                fontSize: ".9rem",
+                color: "var(--ink)",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: ".8rem .9rem",
+                marginBottom: "1rem",
+              }}
+            >
+              ✉️ Your email is held and waiting. Lock the refundable deposit below
+              to deliver it to their inbox.
+            </div>
+          ) : (
+            <>
+              <label style={{ fontSize: ".85rem", color: "var(--muted)" }}>
+                Your message
+              </label>
+              <textarea
+                className="field"
+                style={{ margin: ".4rem 0 1rem" }}
+                placeholder="Say why you're worth their time…"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+            </>
+          )}
 
           <label style={{ fontSize: ".85rem", color: "var(--muted)" }}>
             Refundable deposit (MON)
@@ -177,11 +196,18 @@ export default function PayPage({
             <button
               className="btn btn-brass"
               style={{ width: "100%" }}
-              disabled={isPending || mining || !message.trim() || Number(amount) <= 0}
+              disabled={
+                isPending ||
+                mining ||
+                (!mid && !message.trim()) ||
+                Number(amount) <= 0
+              }
               onClick={send}
             >
               {isPending || mining
                 ? "Locking deposit…"
+                : mid
+                ? `Pay & deliver · lock ${amount} MON`
                 : `Send message · lock ${amount} MON`}
             </button>
           )}
