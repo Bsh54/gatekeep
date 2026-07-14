@@ -1,0 +1,7 @@
+name = "gatekeep-email"
+main = "src/worker.js"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+# INBOUND_SECRET is set as a secret via: wrangler secret put INBOUND_SECRET
+# Send capability for message.reply() is granted automatically by Email Routing.
