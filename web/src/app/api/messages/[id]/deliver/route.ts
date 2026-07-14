@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { markDelivered } from "@/lib/db";
+import { sendMessageAlert } from "@/lib/alert";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,5 +19,7 @@ export async function POST(
   } catch {}
   const m = await markDelivered(id, escrowId);
   if (!m) return NextResponse.json({ error: "not found" }, { status: 404 });
+  // Alert the recipient at their real email (fire-and-forget).
+  sendMessageAlert(m);
   return NextResponse.json({ ok: true });
 }

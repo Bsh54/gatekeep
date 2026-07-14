@@ -31,7 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             },
           },
         },
-        wallets: ["METAMASK", "COINBASE", "WALLETCONNECT", "RAINBOW", "RABBY"],
+        wallets: ["METAMASK"],
       }}
     >
       {children}

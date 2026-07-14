@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "child_process";
 import path from "path";
-import { getMessageById, setStatus } from "@/lib/db";
+import { getMessageById, setStatus, addReply } from "@/lib/db";
 import { relayRefund } from "@/lib/relay";
 
 export const runtime = "nodejs";
@@ -49,13 +49,15 @@ export async function POST(req: NextRequest) {
     references,
   });
 
-  // Auto-refund the sender's deposit via the relayer (no wallet signature needed).
+  // Auto-refund the sender's deposit once, on the first reply. Invisible to the user.
   let refunded = false;
-  if (m.escrowId) {
+  if (m.status === "delivered" && m.escrowId) {
     const r = await relayRefund(m.escrowId);
     refunded = r.ok;
   }
 
+  // Persist the reply so it shows in the conversation thread.
+  await addReply(id, text);
   await setStatus(id, "replied");
   return NextResponse.json({ ok: true, sent: result.sent, refunded });
 }

@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Instrument_Sans } from "next/font/google";
+import { JetBrains_Mono, DM_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
 
-const sans = Instrument_Sans({
+// Body — DM Sans (highly readable). Recommended by UI UX Pro Max for SaaS/trust.
+const sans = DM_Sans({
   variable: "--font-sans",
+  weight: ["400", "500", "700"],
+  subsets: ["latin"],
+});
+
+// Headings — Space Grotesk (distinctive, tech). Paired with DM Sans.
+const head = Space_Grotesk({
+  variable: "--font-head",
+  weight: ["500", "600", "700"],
   subsets: ["latin"],
 });
 
@@ -24,8 +32,8 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${sans.variable} ${mono.variable}`}>
-        <Providers>{children}</Providers>
+      <body className={`${sans.variable} ${head.variable} ${mono.variable}`}>
+        {children}
       </body>
     </html>
   );

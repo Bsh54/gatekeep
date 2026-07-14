@@ -26,3 +26,4 @@ deployments.local.json
 # Internal / infra docs — keep local, not in public repo
 DNS-RECORDS.md
 PROJET.md
+RELAYER.md
