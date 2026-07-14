@@ -2,24 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { formatEther } from "viem";
-import {
-  useAccount,
-  useReadContract,
-  useReadContracts,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, useWriteContract } from "wagmi";
 import { ConnectButton } from "@/components/ConnectButton";
-import { ESCROW_ABI, ESCROW_ADDRESS, EXPLORER, STATUS } from "@/lib/contract";
-
-type Msg = {
-  sender: `0x${string}`;
-  recipient: `0x${string}`;
-  amount: bigint;
-  deadline: bigint;
-  status: number;
-};
+import { ESCROW_ABI, ESCROW_ADDRESS, EXPLORER } from "@/lib/contract";
 
 type EmailMsg = {
   id: string;
@@ -93,53 +78,17 @@ export default function Dashboard() {
     }
   }
 
-  const { data: nextId } = useReadContract({
-    abi: ESCROW_ABI,
-    address: ESCROW_ADDRESS,
-    functionName: "nextId",
-    query: { refetchInterval: 4000 },
-  });
-
-  const ids = useMemo(() => {
-    const n = nextId ? Number(nextId) : 1;
-    return Array.from({ length: Math.max(0, n - 1) }, (_, i) => BigInt(i + 1));
-  }, [nextId]);
-
-  const { data: raw, refetch } = useReadContracts({
-    allowFailure: false,
-    contracts: ids.map((id) => ({
-      abi: ESCROW_ABI,
-      address: ESCROW_ADDRESS,
-      functionName: "getMessage" as const,
-      args: [id] as const,
-    })),
-    query: { enabled: ids.length > 0, refetchInterval: 4000 },
-  });
-
   const { writeContract, data: hash } = useWriteContract();
-  useWaitForTransactionReceipt({ hash, query: { enabled: !!hash } });
 
-  const rows = useMemo(() => {
-    if (!raw || !address) return [];
-    return (raw as unknown as Msg[])
-      .map((m, i) => ({ id: ids[i], ...m }))
-      .filter((m) => m.sender.toLowerCase() === address.toLowerCase())
-      .reverse();
-  }, [raw, address, ids]);
-
-  const stats = useMemo(() => {
-    const awaiting = emails.filter((e) => e.status === "pending").length;
-    const escrow = emails
-      .filter((e) => e.status === "delivered")
-      .length; // count of live deposits tied to messages
-    return {
+  const stats = useMemo(
+    () => ({
       messages: emails.length,
-      awaiting,
+      awaiting: emails.filter((e) => e.status === "pending").length,
       delivered: emails.filter((e) => e.status === "delivered").length,
       earnedToPublicGoods: emails.filter((e) => e.status === "rejected").length,
-      escrow,
-    };
-  }, [emails]);
+    }),
+    [emails]
+  );
 
   function copyAddr() {
     if (!handle) return;
@@ -148,6 +97,7 @@ export default function Dashboard() {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  // Replying sends the email AND automatically refunds the sender's deposit.
   async function sendReply(m: EmailMsg) {
     if (!replyText.trim()) return;
     setSending(true);
@@ -158,29 +108,23 @@ export default function Dashboard() {
         body: JSON.stringify({ id: m.id, text: replyText }),
       });
       const j = await r.json();
+      if (m.escrowId) {
+        writeContract({
+          abi: ESCROW_ABI,
+          address: ESCROW_ADDRESS,
+          functionName: "refund",
+          args: [BigInt(m.escrowId)],
+        });
+      }
       setReplyingId(null);
       setReplyText("");
       if (j.sent === false) {
         alert("Reply saved, but the email could not be delivered.");
       }
-      setTimeout(loadEmail, 1500);
+      setTimeout(loadEmail, 2500);
     } finally {
       setSending(false);
     }
-  }
-
-  function refundDeposit(m: EmailMsg) {
-    if (!m.escrowId) return;
-    writeContract({
-      abi: ESCROW_ABI,
-      address: ESCROW_ADDRESS,
-      functionName: "refund",
-      args: [BigInt(m.escrowId)],
-    });
-    setTimeout(() => {
-      loadEmail();
-      refetch();
-    }, 2500);
   }
 
   function markSpam(m: EmailMsg) {
@@ -343,13 +287,8 @@ export default function Dashboard() {
                                 setReplyText("");
                               }}
                             >
-                              Reply
+                              Reply &amp; refund
                             </button>
-                            {e.escrowId && (
-                              <button className="btn btn-ghost" onClick={() => refundDeposit(e)}>
-                                Refund deposit
-                              </button>
-                            )}
                             <button className="btn btn-danger" onClick={() => markSpam(e)}>
                               Mark spam → public goods
                             </button>
@@ -361,54 +300,6 @@ export default function Dashboard() {
                 );
               })}
             </div>
-          )}
-
-          {/* Sent deposits (reclaim) */}
-          {rows.length > 0 && (
-            <>
-              <SectionTitle>Deposits you sent</SectionTitle>
-              <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
-                {rows.map((m) => {
-                  const expired = Number(m.deadline) * 1000 < Date.now();
-                  const st = STATUS[m.status] ?? "?";
-                  return (
-                    <div key={m.id.toString()} className="card" style={{ padding: ".9rem 1rem" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: ".5rem", flexWrap: "wrap" }}>
-                        <div>
-                          <div className="mono" style={{ fontSize: ".8rem", color: "var(--muted)" }}>
-                            #{m.id.toString()} · to {m.recipient.slice(0, 8)}…
-                          </div>
-                          <div style={{ fontSize: "1.05rem", fontWeight: 600, marginTop: ".2rem" }}>
-                            {formatEther(m.amount)} MON
-                          </div>
-                        </div>
-                        <span className={`pill ${st === "Pending" ? "pill-brass" : st === "Refunded" ? "pill-green" : ""}`}>
-                          {st}
-                        </span>
-                      </div>
-                      {m.status === 1 && (
-                        <div style={{ marginTop: ".8rem" }}>
-                          <button
-                            className="btn btn-ghost"
-                            disabled={!expired}
-                            onClick={() =>
-                              writeContract({
-                                abi: ESCROW_ABI,
-                                address: ESCROW_ADDRESS,
-                                functionName: "reclaim",
-                                args: [m.id],
-                              })
-                            }
-                          >
-                            {expired ? "Reclaim (no reply)" : "Reclaim after deadline"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
           )}
 
           {hash && (

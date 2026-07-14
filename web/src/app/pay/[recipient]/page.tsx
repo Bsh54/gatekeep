@@ -39,6 +39,26 @@ export default function PayPage({
   } = useWaitForTransactionReceipt({ hash });
 
   const [message, setMessage] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [alreadyPaid, setAlreadyPaid] = useState(false);
+
+  // If this message was already paid for, block a second payment.
+  useEffect(() => {
+    if (!mid) return;
+    fetch(`/api/messages/${mid}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.status && j.status !== "pending") setAlreadyPaid(true);
+      })
+      .catch(() => {});
+  }, [mid]);
+
+  function copyMyAddress() {
+    if (!address) return;
+    navigator.clipboard?.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
 
   useEffect(() => {
     if (!isSuccess || !mid || !receipt) return;
@@ -90,14 +110,22 @@ export default function PayPage({
         <div className="card" style={{ padding: "1.25rem" }}>
           <p style={{ margin: 0 }}>This isn&apos;t a valid recipient address.</p>
         </div>
+      ) : alreadyPaid ? (
+        <div className="card" style={{ padding: "1.5rem", textAlign: "center" }}>
+          <div style={{ fontSize: "2rem" }}>📬</div>
+          <h2 style={{ margin: ".5rem 0" }}>Already delivered</h2>
+          <p style={{ color: "var(--muted)" }}>
+            This message has already been paid for and delivered. You won&apos;t be
+            charged twice.
+          </p>
+        </div>
       ) : isSuccess ? (
         <div className="card" style={{ padding: "1.5rem", textAlign: "center" }}>
           <div style={{ fontSize: "2rem" }}>✅</div>
           <h2 style={{ margin: ".5rem 0" }}>Message delivered</h2>
           <p style={{ color: "var(--muted)" }}>
             Your deposit is locked in escrow. You&apos;ll be refunded the moment
-            they reply — and you can reclaim it yourself after {RESPONSE_WINDOW_HOURS}h
-            if they don&apos;t.
+            they reply.
           </p>
           {hash && (
             <a
@@ -171,33 +199,64 @@ export default function PayPage({
             }}
           >
             <li>🔁 Refunded in full the moment they reply.</li>
-            <li>⏱️ Reclaimable by you after {RESPONSE_WINDOW_HOURS}h if they don&apos;t respond.</li>
             <li>❤️ Only goes to public goods if they mark it as spam.</li>
           </ul>
 
-          {isConnected && (
+          {isConnected && address && (
             <div
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                fontSize: ".82rem",
-                color: "var(--muted)",
-                marginBottom: ".8rem",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: ".7rem .9rem",
+                marginBottom: ".9rem",
               }}
             >
-              <span>Your balance</span>
-              <span
-                className="mono"
+              <div
                 style={{
-                  color:
-                    balance && Number(formatEther(balance.value)) >= Number(FIXED_DEPOSIT)
-                      ? "var(--green)"
-                      : "var(--red)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: ".45rem",
                 }}
               >
-                {balance ? Number(formatEther(balance.value)).toFixed(3) : "0.000"} MON
-              </span>
+                <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+                  YOUR WALLET — top it up to pay
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: ".82rem",
+                    color:
+                      balance && Number(formatEther(balance.value)) >= Number(FIXED_DEPOSIT)
+                        ? "var(--green)"
+                        : "var(--red)",
+                  }}
+                >
+                  {balance ? Number(formatEther(balance.value)).toFixed(3) : "0.000"} MON
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+                <code
+                  className="mono"
+                  style={{
+                    flex: 1,
+                    minWidth: 140,
+                    fontSize: ".74rem",
+                    overflow: "auto",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {address}
+                </code>
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: ".4rem .7rem", fontSize: ".78rem" }}
+                  onClick={copyMyAddress}
+                >
+                  {copied ? "Copied ✓" : "Copy"}
+                </button>
+              </div>
             </div>
           )}
 
