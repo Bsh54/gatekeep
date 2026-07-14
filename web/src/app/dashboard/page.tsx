@@ -36,7 +36,7 @@ type EmailMsg = {
   createdAt: number;
 };
 
-const MAIL_DOMAIN = "gatekeep.shadrakbessanh.me";
+const MAIL_DOMAIN = "shadrakbessanh.me";
 
 export default function Dashboard() {
   const { address, isConnected } = useAccount();
