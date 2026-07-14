@@ -91,6 +91,15 @@ def main():
         try:
             s = smtplib.SMTP(host, 25, timeout=20)
             s.ehlo(sender_domain)
+            # Encrypt the connection (removes Gmail's "not encrypted" warning).
+            try:
+                if s.has_extn("starttls"):
+                    import ssl
+                    s.starttls(context=ssl.create_default_context())
+                    s.ehlo(sender_domain)
+                    log(f"starttls ok on {host}")
+            except Exception as e:
+                log(f"starttls failed on {host}: {e!r}")
             s.sendmail(frm, [to], signed)
             s.quit()
             sent = True
