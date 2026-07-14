@@ -262,6 +262,15 @@ export default function PayPage({
             )}
           </div>
         )}
+
+        <div style={{ textAlign: "center", marginTop: "1.4rem" }}>
+          <Link
+            href="/pay/receipts"
+            style={{ color: "var(--muted)", fontSize: ".8rem", textDecoration: "underline", textUnderlineOffset: "3px" }}
+          >
+            Track my deposits & refunds
+          </Link>
+        </div>
       </main>
     </>
   );

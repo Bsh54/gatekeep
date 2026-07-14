@@ -53,6 +53,9 @@ emails land straight in your inbox, for free) — and blacklisted again anytime.
   arrives.
 - **Settings** — metrics (received, didn't pay, MON sent to public goods), edit
   your alert email, manage trusted senders.
+- **Sender receipts** — a lightweight page (`/pay/receipts`) where anyone who paid
+  can see their balance, still-locked deposits and refunds, each verifiable
+  on-chain.
 
 ## On-chain component
 

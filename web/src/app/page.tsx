@@ -88,12 +88,11 @@ export default function Home() {
           }}
         >
           <div>
-            <span className="pill pill-accent">Settled on Monad · testnet</span>
             <h1
               style={{
                 fontSize: "clamp(2.6rem, 6vw, 4.4rem)",
                 lineHeight: 1.0,
-                margin: "1.2rem 0 1rem",
+                margin: "0 0 1rem",
               }}
             >
               A velvet rope
