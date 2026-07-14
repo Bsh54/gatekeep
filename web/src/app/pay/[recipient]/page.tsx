@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { parseEther, isAddress } from "viem";
 import {
   useAccount,
@@ -22,6 +23,7 @@ export default function PayPage({
 }) {
   const { recipient } = use(params);
   const valid = isAddress(recipient);
+  const mid = useSearchParams().get("mid");
 
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -31,6 +33,13 @@ export default function PayPage({
 
   const [message, setMessage] = useState("");
   const [amount, setAmount] = useState("0.5");
+
+  // When the deposit confirms, release the held email into the recipient's inbox.
+  useEffect(() => {
+    if (isSuccess && mid) {
+      fetch(`/api/messages/${mid}/deliver`, { method: "POST" }).catch(() => {});
+    }
+  }, [isSuccess, mid]);
 
   const wrongChain = chainId !== CHAIN.id;
   const selfSend =

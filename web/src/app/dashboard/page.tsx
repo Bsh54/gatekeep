@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { formatEther } from "viem";
 import {
   useAccount,
@@ -26,8 +26,60 @@ type Msg = {
   status: number;
 };
 
+type EmailMsg = {
+  id: string;
+  handle: string;
+  fromEmail: string;
+  subject: string;
+  body: string;
+  status: "pending" | "delivered";
+  createdAt: number;
+};
+
+const MAIL_DOMAIN = "gatekeep.shadrakbessanh.me";
+
 export default function Dashboard() {
   const { address, isConnected } = useAccount();
+
+  const [handle, setHandle] = useState<string | null>(null);
+  const [handleInput, setHandleInput] = useState("");
+  const [emails, setEmails] = useState<EmailMsg[]>([]);
+  const [claiming, setClaiming] = useState(false);
+
+  const loadEmail = useCallback(async () => {
+    if (!address) return;
+    try {
+      const [h, m] = await Promise.all([
+        fetch(`/api/handles?wallet=${address}`).then((r) => r.json()),
+        fetch(`/api/messages?wallet=${address}`).then((r) => r.json()),
+      ]);
+      setHandle(h.handle ?? null);
+      setEmails(m.messages ?? []);
+    } catch {}
+  }, [address]);
+
+  useEffect(() => {
+    loadEmail();
+    const t = setInterval(loadEmail, 5000);
+    return () => clearInterval(t);
+  }, [loadEmail]);
+
+  async function claim() {
+    if (!address || !handleInput.trim()) return;
+    setClaiming(true);
+    try {
+      const r = await fetch("/api/handles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle: handleInput.trim(), wallet: address }),
+      });
+      const j = await r.json();
+      if (j.handle) setHandle(j.handle);
+      else alert(j.error ?? "Could not claim that handle");
+    } finally {
+      setClaiming(false);
+    }
+  }
 
   const { data: nextId } = useReadContract({
     abi: ESCROW_ABI,
@@ -92,6 +144,76 @@ export default function Dashboard() {
       <div className="rope" style={{ margin: "1.25rem 0" }} />
 
       <h1 style={{ fontSize: "1.4rem", margin: "0 0 1rem" }}>Your inbox</h1>
+
+      {isConnected && (
+        <div className="card" style={{ padding: "1rem", marginBottom: "1rem" }}>
+          {handle ? (
+            <div>
+              <div style={{ color: "var(--muted)", fontSize: ".82rem" }}>
+                Your gated email address — share it anywhere:
+              </div>
+              <code
+                className="mono"
+                style={{ fontSize: "1rem", color: "var(--brass)" }}
+              >
+                {handle}@{MAIL_DOMAIN}
+              </code>
+            </div>
+          ) : (
+            <div>
+              <div style={{ color: "var(--muted)", fontSize: ".82rem", marginBottom: ".5rem" }}>
+                Activate your gated email address:
+              </div>
+              <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
+                <input
+                  className="field"
+                  style={{ flex: 1, minWidth: 160 }}
+                  placeholder="yourname"
+                  value={handleInput}
+                  onChange={(e) => setHandleInput(e.target.value)}
+                />
+                <span className="mono" style={{ alignSelf: "center", color: "var(--muted)" }}>
+                  @{MAIL_DOMAIN}
+                </span>
+                <button className="btn btn-brass" disabled={claiming} onClick={claim}>
+                  Claim
+                </button>
+              </div>
+            </div>
+          )}
+
+          {emails.length > 0 && (
+            <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: ".5rem" }}>
+              {emails.map((e) => (
+                <div
+                  key={e.id}
+                  style={{
+                    background: "var(--bg)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    padding: ".7rem .9rem",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: ".5rem" }}>
+                    <span className="mono" style={{ fontSize: ".8rem", color: "var(--muted)" }}>
+                      {e.fromEmail}
+                    </span>
+                    <span className={`pill ${e.status === "delivered" ? "pill-green" : "pill-brass"}`}>
+                      {e.status === "delivered" ? "paid · delivered" : "awaiting payment"}
+                    </span>
+                  </div>
+                  <div style={{ fontWeight: 600, marginTop: ".3rem" }}>{e.subject}</div>
+                  {e.status === "delivered" && (
+                    <p style={{ color: "var(--muted)", fontSize: ".9rem", margin: ".3rem 0 0" }}>
+                      {e.body}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {!isConnected ? (
         <div className="card" style={{ padding: "1.5rem", textAlign: "center" }}>
