@@ -27,8 +27,9 @@ type EmailMsg = {
   fromEmail: string;
   subject: string;
   body: string;
-  status: "pending" | "delivered";
+  status: "pending" | "delivered" | "replied" | "rejected";
   createdAt: number;
+  escrowId?: string;
 };
 
 const MAIL_DOMAIN = "shadrakbessanh.me";
@@ -52,6 +53,10 @@ export default function Dashboard() {
   const [emails, setEmails] = useState<EmailMsg[]>([]);
   const [claiming, setClaiming] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const [replyingId, setReplyingId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
 
   const loadEmail = useCallback(async () => {
     if (!address) return;
@@ -111,53 +116,82 @@ export default function Dashboard() {
     query: { enabled: ids.length > 0, refetchInterval: 4000 },
   });
 
-  const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: mining } = useWaitForTransactionReceipt({
-    hash,
-    query: { enabled: !!hash },
-  });
-  const busy = isPending || mining;
+  const { writeContract, data: hash } = useWriteContract();
+  useWaitForTransactionReceipt({ hash, query: { enabled: !!hash } });
 
   const rows = useMemo(() => {
     if (!raw || !address) return [];
     return (raw as unknown as Msg[])
       .map((m, i) => ({ id: ids[i], ...m }))
-      .filter(
-        (m) =>
-          m.recipient.toLowerCase() === address.toLowerCase() ||
-          m.sender.toLowerCase() === address.toLowerCase()
-      )
+      .filter((m) => m.sender.toLowerCase() === address.toLowerCase())
       .reverse();
   }, [raw, address, ids]);
 
   const stats = useMemo(() => {
-    const incoming = rows.filter(
-      (m) => address && m.recipient.toLowerCase() === address.toLowerCase()
-    );
-    const inEscrow = incoming
-      .filter((m) => m.status === 1)
-      .reduce((s, m) => s + m.amount, 0n);
     const awaiting = emails.filter((e) => e.status === "pending").length;
+    const escrow = emails
+      .filter((e) => e.status === "delivered")
+      .length; // count of live deposits tied to messages
     return {
       messages: emails.length,
       awaiting,
-      escrow: formatEther(inEscrow),
-      pendingDeposits: incoming.filter((m) => m.status === 1).length,
+      delivered: emails.filter((e) => e.status === "delivered").length,
+      earnedToPublicGoods: emails.filter((e) => e.status === "rejected").length,
+      escrow,
     };
-  }, [rows, emails, address]);
-
-  function act(fn: "refund" | "reject" | "reclaim", id: bigint) {
-    writeContract(
-      { abi: ESCROW_ABI, address: ESCROW_ADDRESS, functionName: fn, args: [id] },
-      { onSuccess: () => setTimeout(() => refetch(), 2500) }
-    );
-  }
+  }, [emails]);
 
   function copyAddr() {
     if (!handle) return;
     navigator.clipboard?.writeText(`${handle}@${MAIL_DOMAIN}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function sendReplyAndRefund(m: EmailMsg) {
+    if (!replyText.trim()) return;
+    setSending(true);
+    try {
+      // 1) send the reply email to the sender (threaded)
+      await fetch("/api/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: m.id, text: replyText }),
+      });
+      // 2) refund the deposit on-chain
+      if (m.escrowId) {
+        writeContract({
+          abi: ESCROW_ABI,
+          address: ESCROW_ADDRESS,
+          functionName: "refund",
+          args: [BigInt(m.escrowId)],
+        });
+      }
+      setReplyingId(null);
+      setReplyText("");
+      setTimeout(() => {
+        loadEmail();
+        refetch();
+      }, 2500);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function markSpam(m: EmailMsg) {
+    if (m.escrowId) {
+      writeContract({
+        abi: ESCROW_ABI,
+        address: ESCROW_ADDRESS,
+        functionName: "reject",
+        args: [BigInt(m.escrowId)],
+      });
+    }
+    fetch(`/api/messages/${m.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "rejected" }),
+    }).finally(() => setTimeout(loadEmail, 2500));
   }
 
   return (
@@ -185,19 +219,9 @@ export default function Dashboard() {
           {/* Address card */}
           <div className="card" style={{ padding: "1.1rem 1.2rem", marginBottom: "1rem" }}>
             {handle ? (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: ".6rem",
-                  flexWrap: "wrap",
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontSize: ".75rem", color: "var(--muted)" }}>
-                    YOUR GATED ADDRESS
-                  </div>
+                  <div style={{ fontSize: ".75rem", color: "var(--muted)" }}>YOUR GATED ADDRESS</div>
                   <div className="mono" style={{ fontSize: "1.15rem", color: "var(--brass)" }}>
                     {handle}@{MAIL_DOMAIN}
                   </div>
@@ -239,90 +263,142 @@ export default function Dashboard() {
           >
             <Stat label="Messages" value={String(stats.messages)} />
             <Stat label="Awaiting payment" value={String(stats.awaiting)} accent="var(--brass)" />
-            <Stat label="Deposits pending" value={String(stats.pendingDeposits)} />
-            <Stat label="In escrow (MON)" value={stats.escrow} accent="var(--green)" />
+            <Stat label="Paid & delivered" value={String(stats.delivered)} accent="var(--green)" />
+            <Stat label="Sent to public goods" value={String(stats.earnedToPublicGoods)} />
           </div>
 
-          {/* Messages (email) */}
+          {/* Messages */}
           <SectionTitle>Messages</SectionTitle>
           {emails.length === 0 ? (
             <div className="card" style={{ padding: "1.2rem", textAlign: "center", color: "var(--muted)", marginBottom: "1.4rem" }}>
               No messages yet. Share your address and they&apos;ll appear here.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: ".6rem", marginBottom: "1.4rem" }}>
-              {emails.map((e) => (
-                <div key={e.id} className="card" style={{ padding: ".9rem 1rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: ".5rem", flexWrap: "wrap" }}>
-                    <span className="mono" style={{ fontSize: ".82rem", color: "var(--muted)" }}>
-                      {e.fromEmail}
-                    </span>
-                    <span className={`pill ${e.status === "delivered" ? "pill-green" : "pill-brass"}`}>
-                      {e.status === "delivered" ? "paid · delivered" : "awaiting payment"}
-                    </span>
-                  </div>
-                  <div style={{ fontWeight: 600, marginTop: ".3rem" }}>{e.subject}</div>
-                  {e.status === "delivered" && (
-                    <p style={{ color: "var(--muted)", fontSize: ".9rem", margin: ".3rem 0 0", whiteSpace: "pre-wrap" }}>
-                      {e.body}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* On-chain deposits */}
-          <SectionTitle>On-chain deposits</SectionTitle>
-          {rows.length === 0 ? (
-            <div className="card" style={{ padding: "1.2rem", textAlign: "center", color: "var(--muted)" }}>
-              No deposits yet.
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
-              {rows.map((m) => {
-                const incoming = m.recipient.toLowerCase() === address!.toLowerCase();
-                const expired = Number(m.deadline) * 1000 < Date.now();
-                const st = STATUS[m.status] ?? "?";
+            <div style={{ display: "flex", flexDirection: "column", gap: ".6rem", marginBottom: "1.6rem" }}>
+              {emails.map((e) => {
+                const pill =
+                  e.status === "delivered"
+                    ? "pill-green"
+                    : e.status === "pending"
+                    ? "pill-brass"
+                    : "";
+                const label =
+                  e.status === "pending"
+                    ? "awaiting payment"
+                    : e.status === "delivered"
+                    ? "paid · action needed"
+                    : e.status === "replied"
+                    ? "replied · refunded"
+                    : "marked spam";
                 return (
-                  <div key={m.id.toString()} className="card" style={{ padding: ".9rem 1rem" }}>
+                  <div key={e.id} className="card" style={{ padding: ".9rem 1rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: ".5rem", flexWrap: "wrap" }}>
-                      <div>
-                        <div className="mono" style={{ fontSize: ".8rem", color: "var(--muted)" }}>
-                          #{m.id.toString()} · {incoming ? "from" : "to"}{" "}
-                          {(incoming ? m.sender : m.recipient).slice(0, 8)}…
-                        </div>
-                        <div style={{ fontSize: "1.05rem", fontWeight: 600, marginTop: ".2rem" }}>
-                          {formatEther(m.amount)} MON
-                        </div>
-                      </div>
-                      <span className={`pill ${st === "Pending" ? "pill-brass" : st === "Refunded" ? "pill-green" : ""}`}>
-                        {st}
+                      <span className="mono" style={{ fontSize: ".82rem", color: "var(--muted)" }}>
+                        {e.fromEmail}
                       </span>
+                      <span className={`pill ${pill}`}>{label}</span>
                     </div>
-
-                    {m.status === 1 && incoming && (
-                      <div style={{ display: "flex", gap: ".5rem", marginTop: ".8rem", flexWrap: "wrap" }}>
-                        <button className="btn btn-brass" disabled={busy} onClick={() => act("refund", m.id)}>
-                          Reply &amp; refund
-                        </button>
-                        <button className="btn btn-danger" disabled={busy} onClick={() => act("reject", m.id)}>
-                          Mark spam → public goods
-                        </button>
-                      </div>
+                    <div style={{ fontWeight: 600, marginTop: ".3rem" }}>{e.subject}</div>
+                    {e.status !== "pending" && (
+                      <p style={{ color: "var(--muted)", fontSize: ".9rem", margin: ".3rem 0 0", whiteSpace: "pre-wrap" }}>
+                        {e.body}
+                      </p>
                     )}
 
-                    {m.status === 1 && !incoming && (
+                    {e.status === "delivered" && (
                       <div style={{ marginTop: ".8rem" }}>
-                        <button className="btn btn-ghost" disabled={busy || !expired} onClick={() => act("reclaim", m.id)}>
-                          {expired ? "Reclaim (no reply)" : "Reclaim after deadline"}
-                        </button>
+                        {replyingId === e.id ? (
+                          <div>
+                            <textarea
+                              className="field"
+                              style={{ marginBottom: ".5rem" }}
+                              placeholder="Write your reply — it will be emailed to them, and their deposit refunded."
+                              value={replyText}
+                              onChange={(ev) => setReplyText(ev.target.value)}
+                            />
+                            <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
+                              <button
+                                className="btn btn-brass"
+                                disabled={sending || !replyText.trim()}
+                                onClick={() => sendReplyAndRefund(e)}
+                              >
+                                {sending ? "Sending…" : "Send reply & refund"}
+                              </button>
+                              <button className="btn btn-ghost" onClick={() => setReplyingId(null)}>
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
+                            <button
+                              className="btn btn-brass"
+                              onClick={() => {
+                                setReplyingId(e.id);
+                                setReplyText("");
+                              }}
+                            >
+                              Reply &amp; refund
+                            </button>
+                            <button className="btn btn-danger" onClick={() => markSpam(e)}>
+                              Mark spam → public goods
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
+          )}
+
+          {/* Sent deposits (reclaim) */}
+          {rows.length > 0 && (
+            <>
+              <SectionTitle>Deposits you sent</SectionTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
+                {rows.map((m) => {
+                  const expired = Number(m.deadline) * 1000 < Date.now();
+                  const st = STATUS[m.status] ?? "?";
+                  return (
+                    <div key={m.id.toString()} className="card" style={{ padding: ".9rem 1rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: ".5rem", flexWrap: "wrap" }}>
+                        <div>
+                          <div className="mono" style={{ fontSize: ".8rem", color: "var(--muted)" }}>
+                            #{m.id.toString()} · to {m.recipient.slice(0, 8)}…
+                          </div>
+                          <div style={{ fontSize: "1.05rem", fontWeight: 600, marginTop: ".2rem" }}>
+                            {formatEther(m.amount)} MON
+                          </div>
+                        </div>
+                        <span className={`pill ${st === "Pending" ? "pill-brass" : st === "Refunded" ? "pill-green" : ""}`}>
+                          {st}
+                        </span>
+                      </div>
+                      {m.status === 1 && (
+                        <div style={{ marginTop: ".8rem" }}>
+                          <button
+                            className="btn btn-ghost"
+                            disabled={!expired}
+                            onClick={() =>
+                              writeContract({
+                                abi: ESCROW_ABI,
+                                address: ESCROW_ADDRESS,
+                                functionName: "reclaim",
+                                args: [m.id],
+                              })
+                            }
+                          >
+                            {expired ? "Reclaim (no reply)" : "Reclaim after deadline"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
 
           {hash && (

@@ -13,8 +13,11 @@ export type Message = {
   fromEmail: string;
   subject: string;
   body: string;
-  status: "pending" | "delivered";
+  status: "pending" | "delivered" | "replied" | "rejected";
   createdAt: number;
+  emailMessageId?: string;
+  references?: string;
+  escrowId?: string;
 };
 
 type DB = { handles: Handle[]; messages: Message[] };
@@ -78,6 +81,21 @@ export async function addMessage(m: Omit<Message, "id" | "createdAt" | "status">
   return msg;
 }
 
+export async function getMessageById(id: string) {
+  const db = await read();
+  return db.messages.find((m) => m.id === id) ?? null;
+}
+
+export async function setStatus(id: string, status: Message["status"]) {
+  const db = await read();
+  const m = db.messages.find((x) => x.id === id);
+  if (m) {
+    m.status = status;
+    await write(db);
+  }
+  return m ?? null;
+}
+
 export async function messagesForWallet(wallet: string) {
   const db = await read();
   return db.messages
@@ -85,11 +103,12 @@ export async function messagesForWallet(wallet: string) {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-export async function markDelivered(id: string) {
+export async function markDelivered(id: string, escrowId?: string) {
   const db = await read();
   const m = db.messages.find((x) => x.id === id);
   if (m) {
     m.status = "delivered";
+    if (escrowId) m.escrowId = escrowId;
     await write(db);
   }
   return m ?? null;

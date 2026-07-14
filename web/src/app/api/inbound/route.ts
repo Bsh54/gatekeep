@@ -14,12 +14,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const { to, from, subject, body } = await req.json();
+  const { to, from, subject, body, messageId, references } = await req.json();
   if (!to || !from) {
     return NextResponse.json({ error: "to and from required" }, { status: 400 });
   }
 
-  // local part of  handle@gatekeep.shadrakbessanh.me
+  // local part of  handle@shadrakbessanh.me
   const handle = String(to).split("@")[0]?.toLowerCase();
   const owner = handle ? await walletForHandle(handle) : null;
   if (!owner) {
@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
     fromEmail: String(from),
     subject: String(subject ?? "(no subject)"),
     body: String(body ?? ""),
+    emailMessageId: String(messageId ?? ""),
+    references: String(references ?? ""),
   });
 
   const payUrl = `${BASE}/pay/${owner.wallet}?mid=${msg.id}`;

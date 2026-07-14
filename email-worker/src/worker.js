@@ -27,6 +27,8 @@ export default {
           from: message.from,
           subject,
           body,
+          messageId: message.headers.get("Message-ID") || "",
+          references: message.headers.get("References") || "",
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -42,10 +44,14 @@ export default {
 
     // Auto-reply in the same thread with the pay link.
     const reply = createMimeMessage();
-    const inReplyTo = message.headers.get("Message-ID");
-    if (inReplyTo) {
-      reply.setHeader("In-Reply-To", inReplyTo);
-      reply.setHeader("References", inReplyTo);
+    const messageId = message.headers.get("Message-ID");
+    const existingRefs = message.headers.get("References");
+    if (messageId) {
+      reply.setHeader("In-Reply-To", messageId);
+      reply.setHeader(
+        "References",
+        existingRefs ? `${existingRefs} ${messageId}` : messageId
+      );
     }
     reply.setSender({ name: "Gatekeep", addr: message.to });
     reply.setRecipient(message.from);

@@ -3,7 +3,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { parseEther, isAddress } from "viem";
+import { parseEther, isAddress, parseEventLogs } from "viem";
 import {
   useAccount,
   useChainId,
@@ -30,15 +30,32 @@ export default function PayPage({
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const { writeContract, data: hash, isPending, error } = useWriteContract();
-  const { isLoading: mining, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const {
+    data: receipt,
+    isLoading: mining,
+    isSuccess,
+  } = useWaitForTransactionReceipt({ hash });
 
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (isSuccess && mid) {
-      fetch(`/api/messages/${mid}/deliver`, { method: "POST" }).catch(() => {});
-    }
-  }, [isSuccess, mid]);
+    if (!isSuccess || !mid || !receipt) return;
+    let escrowId: string | undefined;
+    try {
+      const logs = parseEventLogs({
+        abi: ESCROW_ABI,
+        eventName: "Deposited",
+        logs: receipt.logs,
+      });
+      const first = logs[0] as unknown as { args?: { id?: bigint } } | undefined;
+      if (first?.args?.id !== undefined) escrowId = first.args.id.toString();
+    } catch {}
+    fetch(`/api/messages/${mid}/deliver`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ escrowId }),
+    }).catch(() => {});
+  }, [isSuccess, mid, receipt]);
 
   const wrongChain = chainId !== CHAIN.id;
 
