@@ -5,6 +5,7 @@ Prints {"sent": bool}.
 """
 import sys, json, subprocess, smtplib
 from email.message import EmailMessage
+from email.utils import make_msgid, formatdate
 
 
 def mx_hosts(domain: str):
@@ -36,6 +37,8 @@ def main():
     msg["From"] = frm
     msg["To"] = to
     msg["Subject"] = data.get("subject", "")
+    msg["Message-ID"] = make_msgid(domain=frm.split("@")[-1])
+    msg["Date"] = formatdate(localtime=True)
     if data.get("in_reply_to"):
         msg["In-Reply-To"] = data["in_reply_to"]
         msg["References"] = data.get("references") or data["in_reply_to"]

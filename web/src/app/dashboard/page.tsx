@@ -148,34 +148,39 @@ export default function Dashboard() {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  async function sendReplyAndRefund(m: EmailMsg) {
+  async function sendReply(m: EmailMsg) {
     if (!replyText.trim()) return;
     setSending(true);
     try {
-      // 1) send the reply email to the sender (threaded)
-      await fetch("/api/reply", {
+      const r = await fetch("/api/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: m.id, text: replyText }),
       });
-      // 2) refund the deposit on-chain
-      if (m.escrowId) {
-        writeContract({
-          abi: ESCROW_ABI,
-          address: ESCROW_ADDRESS,
-          functionName: "refund",
-          args: [BigInt(m.escrowId)],
-        });
-      }
+      const j = await r.json();
       setReplyingId(null);
       setReplyText("");
-      setTimeout(() => {
-        loadEmail();
-        refetch();
-      }, 2500);
+      if (j.sent === false) {
+        alert("Reply saved, but the email could not be delivered.");
+      }
+      setTimeout(loadEmail, 1500);
     } finally {
       setSending(false);
     }
+  }
+
+  function refundDeposit(m: EmailMsg) {
+    if (!m.escrowId) return;
+    writeContract({
+      abi: ESCROW_ABI,
+      address: ESCROW_ADDRESS,
+      functionName: "refund",
+      args: [BigInt(m.escrowId)],
+    });
+    setTimeout(() => {
+      loadEmail();
+      refetch();
+    }, 2500);
   }
 
   function markSpam(m: EmailMsg) {
@@ -312,7 +317,7 @@ export default function Dashboard() {
                             <textarea
                               className="field"
                               style={{ marginBottom: ".5rem" }}
-                              placeholder="Write your reply — it will be emailed to them, and their deposit refunded."
+                              placeholder="Write your reply — it will be emailed back to them."
                               value={replyText}
                               onChange={(ev) => setReplyText(ev.target.value)}
                             />
@@ -320,9 +325,9 @@ export default function Dashboard() {
                               <button
                                 className="btn btn-brass"
                                 disabled={sending || !replyText.trim()}
-                                onClick={() => sendReplyAndRefund(e)}
+                                onClick={() => sendReply(e)}
                               >
-                                {sending ? "Sending…" : "Send reply & refund"}
+                                {sending ? "Sending…" : "Send reply"}
                               </button>
                               <button className="btn btn-ghost" onClick={() => setReplyingId(null)}>
                                 Cancel
@@ -338,8 +343,13 @@ export default function Dashboard() {
                                 setReplyText("");
                               }}
                             >
-                              Reply &amp; refund
+                              Reply
                             </button>
+                            {e.escrowId && (
+                              <button className="btn btn-ghost" onClick={() => refundDeposit(e)}>
+                                Refund deposit
+                              </button>
+                            )}
                             <button className="btn btn-danger" onClick={() => markSpam(e)}>
                               Mark spam → public goods
                             </button>

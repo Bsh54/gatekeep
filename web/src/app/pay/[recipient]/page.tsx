@@ -3,9 +3,10 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { parseEther, isAddress, parseEventLogs } from "viem";
+import { parseEther, isAddress, parseEventLogs, formatEther } from "viem";
 import {
   useAccount,
+  useBalance,
   useChainId,
   useSwitchChain,
   useWriteContract,
@@ -26,7 +27,8 @@ export default function PayPage({
   const valid = isAddress(recipient);
   const mid = useSearchParams().get("mid");
 
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
+  const { data: balance } = useBalance({ address });
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const { writeContract, data: hash, isPending, error } = useWriteContract();
@@ -172,6 +174,32 @@ export default function PayPage({
             <li>⏱️ Reclaimable by you after {RESPONSE_WINDOW_HOURS}h if they don&apos;t respond.</li>
             <li>❤️ Only goes to public goods if they mark it as spam.</li>
           </ul>
+
+          {isConnected && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontSize: ".82rem",
+                color: "var(--muted)",
+                marginBottom: ".8rem",
+              }}
+            >
+              <span>Your balance</span>
+              <span
+                className="mono"
+                style={{
+                  color:
+                    balance && Number(formatEther(balance.value)) >= Number(FIXED_DEPOSIT)
+                      ? "var(--green)"
+                      : "var(--red)",
+                }}
+              >
+                {balance ? Number(formatEther(balance.value)).toFixed(3) : "0.000"} MON
+              </span>
+            </div>
+          )}
 
           {!isConnected ? (
             <div style={{ textAlign: "center" }}>
