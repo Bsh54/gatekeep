@@ -22,3 +22,7 @@ deployments.local.json
 # OS / editor
 .DS_Store
 *.log
+
+# Internal / infra docs — keep local, not in public repo
+DNS-RECORDS.md
+PROJET.md
