@@ -2,6 +2,8 @@
 
 **A pay-to-reach toll for your inbox, settled on Monad.**
 
+🔗 **Live:** https://gatekeep.shadrakbessanh.me
+
 Strangers lock a small deposit to message you. Reply and they get it back. Mark it as spam and the deposit funds public goods. Ignore it and, once your response window passes, they can reclaim it. Your inbox only ever shows messages that someone was willing to stand behind.
 
 ---
