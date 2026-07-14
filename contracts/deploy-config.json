@@ -4,6 +4,12 @@
   "rpcUrl": "https://testnet-rpc.monad.xyz",
   "deployer": "0x92f790bEA8a301a708010e63679f5123681D0Ce4",
   "publicGoods": "0x4aEbc0bACaC7C7d32D718aE4B76f2b025D9e6B26",
-  "escrowAddress": "PENDING_DEPLOYMENT",
+  "escrowAddress": "0xa51db37fccb5280fc3f05010122571768e057d4b",
+  "deployTxHash": "0xe90314bac2c52bb3a1d076ae7d2f4c62830dbeb21f3177350ef76bf3988374c5",
+  "verified": true,
+  "explorers": {
+    "monadscan": "https://testnet.monadscan.com/address/0xa51db37fccb5280fc3f05010122571768e057d4b",
+    "monadvision": "https://testnet.monadvision.com/address/0xa51db37fccb5280fc3f05010122571768e057d4b"
+  },
   "notes": "publicGoods is immutable in the contract. On testnet, deposits are valueless test MON. On mainnet this would point to a governance-selected public-goods fund."
 }

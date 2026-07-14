@@ -28,7 +28,8 @@ destination is **immutable** — not even the deployer can redirect funds to the
 outcome (refund / donate / reclaim) is a verifiable on-chain transaction.
 
 - **Network:** Monad Testnet (chain id `10143`)
-- **Contract address:** _deployed — see `deployments.json`_
+- **Contract address:** [`0xa51db37fccb5280fc3f05010122571768e057d4b`](https://testnet.monadscan.com/address/0xa51db37fccb5280fc3f05010122571768e057d4b) (verified)
+- **Public-goods address:** `0x4aEbc0bACaC7C7d32D718aE4B76f2b025D9e6B26` (immutable)
 - **Tests:** `forge test` — 8/8 passing
 
 ## Repo layout
