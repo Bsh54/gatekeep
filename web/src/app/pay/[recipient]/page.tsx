@@ -23,7 +23,7 @@ export default function PayPage({
   const { recipient } = use(params);
   const valid = isAddress(recipient);
 
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const { writeContract, data: hash, isPending, error } = useWriteContract();
@@ -33,6 +33,8 @@ export default function PayPage({
   const [amount, setAmount] = useState("0.5");
 
   const wrongChain = chainId !== CHAIN.id;
+  const selfSend =
+    !!address && address.toLowerCase() === recipient.toLowerCase();
 
   function send() {
     const deadline = BigInt(
@@ -148,6 +150,20 @@ export default function PayPage({
             <button className="btn btn-brass" style={{ width: "100%" }} onClick={() => switchChain({ chainId: CHAIN.id })}>
               Switch to Monad Testnet
             </button>
+          ) : selfSend ? (
+            <div
+              style={{
+                textAlign: "center",
+                color: "var(--red)",
+                fontSize: ".9rem",
+                border: "1px solid rgba(229,101,122,0.4)",
+                borderRadius: 10,
+                padding: ".8rem",
+              }}
+            >
+              This is your own link — you can&apos;t pay to reach yourself.
+              Connect a different wallet to test as a sender.
+            </div>
           ) : (
             <button
               className="btn btn-brass"
