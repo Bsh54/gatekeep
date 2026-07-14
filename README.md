@@ -30,9 +30,12 @@ destination is **immutable** — not even the deployer can redirect funds to the
 outcome (refund / donate / reclaim) is a verifiable on-chain transaction.
 
 - **Network:** Monad Testnet (chain id `10143`)
-- **Contract address:** [`0xa51db37fccb5280fc3f05010122571768e057d4b`](https://testnet.monadscan.com/address/0xa51db37fccb5280fc3f05010122571768e057d4b) (verified)
+- **Contract address:** [`0x3Ddd8AA67C2E6F773091c490BE5AfbF35dF05335`](https://testnet.monadscan.com/address/0x3Ddd8AA67C2E6F773091c490BE5AfbF35dF05335) (verified)
 - **Public-goods address:** `0x4aEbc0bACaC7C7d32D718aE4B76f2b025D9e6B26` (immutable)
-- **Tests:** `forge test` — 8/8 passing
+- **Relayer:** settles refunds/rejections on the recipient's behalf so replying
+  auto-refunds without a wallet signature. It can only ever move funds to the
+  original sender (refund) or the immutable public-goods address (reject).
+- **Tests:** `forge test` — 10/10 passing
 
 ## Repo layout
 
@@ -40,6 +43,45 @@ outcome (refund / donate / reclaim) is a verifiable on-chain transaction.
 contracts/   Foundry project — GatekeepEscrow.sol, tests, deploy script
 web/         Next.js frontend + dashboard (wagmi + Para wallet)
 PROJET.md    Full product write-up (FR)
+```
+
+## Mail server configuration
+
+Gatekeep receives mail via **Cloudflare Email Routing** and sends replies via
+**direct SMTP from the VPS**. To reproduce on your own domain:
+
+### 1. Inbound (receiving) — Cloudflare Email Routing
+- Enable Email Routing on the zone (Cloudflare dashboard → Email → Email Routing).
+  This adds the MX + SPF + DKIM records automatically. Remove any conflicting MX
+  (e.g. a previous ImprovMX setup) first.
+- Deploy the Email Worker in `email-worker/`:
+  ```bash
+  cd email-worker && npm install
+  CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... npx wrangler deploy
+  echo "$INBOUND_SECRET" | npx wrangler secret put INBOUND_SECRET
+  ```
+- Add a **catch-all routing rule → the `gatekeep-email` worker** so every
+  `*@yourdomain` email is gated. The worker holds the message (POST to
+  `/api/inbound`) and auto-replies to the sender with the pay link.
+
+### 2. Outbound (replies) — direct SMTP
+Replies are sent from the VPS straight to the recipient's MX (`web/scripts/send_mail.py`).
+For Gmail/Outlook to accept them, the sending IP must pass **SPF or DKIM**:
+- **SPF (minimum):** add the VPS IP to the domain's SPF TXT record:
+  ```
+  v=spf1 ip4:<VPS_IP> include:_spf.mx.cloudflare.net ~all
+  ```
+- **DKIM (recommended, for inbox not spam):** generate a DKIM key, publish the
+  public key as a TXT record at `<selector>._domainkey.yourdomain`, and sign
+  outbound mail with it. Without DKIM, mail passes SPF but may land in spam.
+- The VPS also needs outbound **port 25** open.
+
+### 3. Environment (`web/.env.local`)
+```
+NEXT_PUBLIC_PARA_API_KEY=...
+NEXT_PUBLIC_ESCROW_ADDRESS=0x3Ddd8AA67C2E6F773091c490BE5AfbF35dF05335
+INBOUND_SECRET=...            # shared secret between the worker and /api/inbound
+RELAYER_PRIVATE_KEY=0x...     # relayer key that settles refunds/rejections
 ```
 
 ## Run it

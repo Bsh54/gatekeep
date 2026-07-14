@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount } from "wagmi";
 import { ConnectButton } from "@/components/ConnectButton";
-import { ESCROW_ABI, ESCROW_ADDRESS, EXPLORER } from "@/lib/contract";
 
 type EmailMsg = {
   id: string;
@@ -78,8 +77,6 @@ export default function Dashboard() {
     }
   }
 
-  const { writeContract, data: hash } = useWriteContract();
-
   const stats = useMemo(
     () => ({
       messages: emails.length,
@@ -97,7 +94,7 @@ export default function Dashboard() {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  // Replying sends the email AND automatically refunds the sender's deposit.
+  // Replying emails the sender and auto-refunds their deposit (relayed server-side).
   async function sendReply(m: EmailMsg) {
     if (!replyText.trim()) return;
     setSending(true);
@@ -108,39 +105,24 @@ export default function Dashboard() {
         body: JSON.stringify({ id: m.id, text: replyText }),
       });
       const j = await r.json();
-      if (m.escrowId) {
-        writeContract({
-          abi: ESCROW_ABI,
-          address: ESCROW_ADDRESS,
-          functionName: "refund",
-          args: [BigInt(m.escrowId)],
-        });
-      }
       setReplyingId(null);
       setReplyText("");
       if (j.sent === false) {
-        alert("Reply saved, but the email could not be delivered.");
+        alert("Refunded, but the email could not be delivered.");
       }
-      setTimeout(loadEmail, 2500);
+      setTimeout(loadEmail, 2000);
     } finally {
       setSending(false);
     }
   }
 
+  // Mark spam: the relayer sends the deposit to public goods on-chain.
   function markSpam(m: EmailMsg) {
-    if (m.escrowId) {
-      writeContract({
-        abi: ESCROW_ABI,
-        address: ESCROW_ADDRESS,
-        functionName: "reject",
-        args: [BigInt(m.escrowId)],
-      });
-    }
-    fetch(`/api/messages/${m.id}/status`, {
+    fetch("/api/spam", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "rejected" }),
-    }).finally(() => setTimeout(loadEmail, 2500));
+      body: JSON.stringify({ id: m.id }),
+    }).finally(() => setTimeout(loadEmail, 2000));
   }
 
   return (
@@ -302,17 +284,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {hash && (
-            <a
-              className="mono"
-              style={{ color: "var(--brass)", fontSize: ".78rem", display: "inline-block", marginTop: "1rem" }}
-              href={`${EXPLORER}/tx/${hash}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              last transaction ↗
-            </a>
-          )}
         </>
       )}
     </main>

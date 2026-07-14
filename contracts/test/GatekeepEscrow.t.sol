@@ -7,11 +7,12 @@ import {GatekeepEscrow} from "../src/GatekeepEscrow.sol";
 contract GatekeepEscrowTest is Test {
     GatekeepEscrow escrow;
     address publicGoods = address(0xBEEF);
+    address relayer = address(0xF00D);
     address recipient = address(0xA11CE);
     address sender = address(0xB0B);
 
     function setUp() public {
-        escrow = new GatekeepEscrow(publicGoods);
+        escrow = new GatekeepEscrow(publicGoods, relayer);
         vm.deal(sender, 10 ether);
     }
 
@@ -69,6 +70,21 @@ contract GatekeepEscrowTest is Test {
         vm.prank(sender);
         vm.expectRevert(GatekeepEscrow.NotRecipient.selector);
         escrow.refund(id);
+    }
+
+    function test_RelayerCanRefund() public {
+        uint256 id = _deposit(1 ether, 1 days);
+        uint256 before = sender.balance;
+        vm.prank(relayer);
+        escrow.refund(id);
+        assertEq(sender.balance, before + 1 ether);
+    }
+
+    function test_RelayerCanReject() public {
+        uint256 id = _deposit(1 ether, 1 days);
+        vm.prank(relayer);
+        escrow.reject(id);
+        assertEq(publicGoods.balance, 1 ether);
     }
 
     function test_RevertZeroDeposit() public {

@@ -9,12 +9,14 @@ contract Deploy is Script {
         // Public-goods destination for rejected (spam) deposits.
         // Override with env PUBLIC_GOODS; falls back to the deployer for local runs.
         address publicGoods = vm.envOr("PUBLIC_GOODS", msg.sender);
+        address relayer = vm.envOr("RELAYER", msg.sender);
 
         vm.startBroadcast();
-        GatekeepEscrow escrow = new GatekeepEscrow(publicGoods);
+        GatekeepEscrow escrow = new GatekeepEscrow(publicGoods, relayer);
         vm.stopBroadcast();
 
         console.log("GatekeepEscrow deployed at:", address(escrow));
         console.log("Public goods address:", publicGoods);
+        console.log("Relayer address:", relayer);
     }
 }

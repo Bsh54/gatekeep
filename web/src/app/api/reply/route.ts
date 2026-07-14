@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "child_process";
 import path from "path";
 import { getMessageById, setStatus } from "@/lib/db";
+import { relayRefund } from "@/lib/relay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
     references,
   });
 
+  // Auto-refund the sender's deposit via the relayer (no wallet signature needed).
+  let refunded = false;
+  if (m.escrowId) {
+    const r = await relayRefund(m.escrowId);
+    refunded = r.ok;
+  }
+
   await setStatus(id, "replied");
-  return NextResponse.json({ ok: true, sent: result.sent });
+  return NextResponse.json({ ok: true, sent: result.sent, refunded });
 }

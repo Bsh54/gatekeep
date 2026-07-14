@@ -28,6 +28,12 @@ contract GatekeepEscrow {
     ///         so nobody — not even the owner — can redirect funds to themselves.
     address public immutable publicGoods;
 
+    /// @notice Trusted relayer that can settle refunds/rejections on a recipient's
+    ///         behalf (so replying auto-refunds without a wallet signature). It is
+    ///         powerless to steal: funds can only ever go to the original sender
+    ///         (refund) or the immutable publicGoods address (reject).
+    address public immutable relayer;
+
     uint256 public nextId = 1;
     mapping(uint256 => Message) public messages;
 
@@ -53,9 +59,10 @@ contract GatekeepEscrow {
     error DeadlineNotReached();
     error TransferFailed();
 
-    constructor(address _publicGoods) {
-        if (_publicGoods == address(0)) revert InvalidRecipient();
+    constructor(address _publicGoods, address _relayer) {
+        if (_publicGoods == address(0) || _relayer == address(0)) revert InvalidRecipient();
         publicGoods = _publicGoods;
+        relayer = _relayer;
     }
 
     /// @notice A sender locks a deposit to message `recipient`. `deadline` is the
@@ -83,18 +90,20 @@ contract GatekeepEscrow {
     }
 
     /// @notice Recipient replied — refund the sender their deposit.
+    ///         Callable by the recipient or the trusted relayer.
     function refund(uint256 id) external {
         Message storage m = _pending(id);
-        if (msg.sender != m.recipient) revert NotRecipient();
+        if (msg.sender != m.recipient && msg.sender != relayer) revert NotRecipient();
         m.status = Status.Refunded;
         emit Refunded(id, m.sender, m.amount);
         _send(m.sender, m.amount);
     }
 
     /// @notice Recipient marks the message as spam — deposit goes to public goods.
+    ///         Callable by the recipient or the trusted relayer.
     function reject(uint256 id) external {
         Message storage m = _pending(id);
-        if (msg.sender != m.recipient) revert NotRecipient();
+        if (msg.sender != m.recipient && msg.sender != relayer) revert NotRecipient();
         m.status = Status.Donated;
         emit Donated(id, publicGoods, m.amount);
         _send(publicGoods, m.amount);

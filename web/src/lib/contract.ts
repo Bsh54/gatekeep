@@ -1,7 +1,7 @@
 import { monadTestnet } from "wagmi/chains";
 
 export const ESCROW_ADDRESS = (process.env.NEXT_PUBLIC_ESCROW_ADDRESS ??
-  "0xa51db37fccb5280fc3f05010122571768e057d4b") as `0x${string}`;
+  "0x3Ddd8AA67C2E6F773091c490BE5AfbF35dF05335") as `0x${string}`;
 
 export const PUBLIC_GOODS_ADDRESS =
   "0x4aEbc0bACaC7C7d32D718aE4B76f2b025D9e6B26" as `0x${string}`;
