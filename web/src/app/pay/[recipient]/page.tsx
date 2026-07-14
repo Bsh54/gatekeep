@@ -3,10 +3,9 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { parseEther, isAddress, formatEther } from "viem";
+import { parseEther, isAddress } from "viem";
 import {
   useAccount,
-  useBalance,
   useChainId,
   useSwitchChain,
   useWriteContract,
@@ -16,6 +15,7 @@ import { ConnectButton } from "@/components/ConnectButton";
 import { ESCROW_ABI, ESCROW_ADDRESS, CHAIN, EXPLORER } from "@/lib/contract";
 
 const RESPONSE_WINDOW_HOURS = 72;
+const FIXED_DEPOSIT = "0.5"; // fixed, not editable
 
 export default function PayPage({
   params,
@@ -26,26 +26,14 @@ export default function PayPage({
   const valid = isAddress(recipient);
   const mid = useSearchParams().get("mid");
 
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: mining, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   const [message, setMessage] = useState("");
-  const [amount, setAmount] = useState("0.5");
-  const [copied, setCopied] = useState(false);
 
-  const { data: balance } = useBalance({ address });
-
-  function copyMyAddress() {
-    if (!address) return;
-    navigator.clipboard?.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
-  // When the deposit confirms, release the held email into the recipient's inbox.
   useEffect(() => {
     if (isSuccess && mid) {
       fetch(`/api/messages/${mid}/deliver`, { method: "POST" }).catch(() => {});
@@ -53,31 +41,23 @@ export default function PayPage({
   }, [isSuccess, mid]);
 
   const wrongChain = chainId !== CHAIN.id;
-  const selfSend =
-    !!address && address.toLowerCase() === recipient.toLowerCase();
 
   function send() {
     const deadline = BigInt(
       Math.floor(Date.now() / 1000) + RESPONSE_WINDOW_HOURS * 3600
     );
-    // Message text is kept locally for this demo; the deposit is what settles on-chain.
-    try {
-      localStorage.setItem(`gk-msg-pending`, message);
-    } catch {}
     writeContract({
       abi: ESCROW_ABI,
       address: ESCROW_ADDRESS,
       functionName: "deposit",
       args: [recipient as `0x${string}`, deadline],
-      value: parseEther(amount || "0"),
+      value: parseEther(FIXED_DEPOSIT),
     });
   }
 
   return (
     <main style={{ maxWidth: 620, margin: "0 auto", padding: "1.5rem 1.25rem" }}>
-      <header
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-      >
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
           <span style={{ fontSize: "1.3rem" }}>📮</span>
           <strong>Gatekeep</strong>
@@ -113,37 +93,24 @@ export default function PayPage({
           )}
         </div>
       ) : (
-        <div className="card" style={{ padding: "1.25rem" }}>
-          <div style={{ color: "var(--muted)", fontSize: ".85rem" }}>
-            {mid ? "Deliver your email to" : "You're about to reach"}
-          </div>
-          <div className="mono" style={{ fontSize: ".95rem", marginBottom: "1rem" }}>
-            {recipient.slice(0, 10)}…{recipient.slice(-8)}
-          </div>
+        <div className="card" style={{ padding: "1.5rem" }}>
+          <h2 style={{ margin: "0 0 .3rem", fontSize: "1.2rem" }}>
+            {mid ? "Deliver your message" : "Reach this inbox"}
+          </h2>
+          <p style={{ color: "var(--muted)", fontSize: ".9rem", marginTop: 0 }}>
+            {mid
+              ? "Your email is held and waiting. Lock the deposit below to deliver it."
+              : "Lock a small refundable deposit to get your message through."}
+          </p>
 
-          {mid ? (
-            <div
-              style={{
-                fontSize: ".9rem",
-                color: "var(--ink)",
-                background: "var(--bg)",
-                border: "1px solid var(--border)",
-                borderRadius: 10,
-                padding: ".8rem .9rem",
-                marginBottom: "1rem",
-              }}
-            >
-              ✉️ Your email is held and waiting. Lock the refundable deposit below
-              to deliver it to their inbox.
-            </div>
-          ) : (
+          {!mid && (
             <>
               <label style={{ fontSize: ".85rem", color: "var(--muted)" }}>
                 Your message
               </label>
               <textarea
                 className="field"
-                style={{ margin: ".4rem 0 1rem" }}
+                style={{ margin: ".4rem 0 1.2rem" }}
                 placeholder="Say why you're worth their time…"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -151,82 +118,43 @@ export default function PayPage({
             </>
           )}
 
-          <label style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-            Refundable deposit (MON)
-          </label>
-          <input
-            className="field"
-            style={{ margin: ".4rem 0 1rem" }}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            inputMode="decimal"
-          />
-
+          {/* Fixed deposit amount (display only) */}
           <div
             style={{
-              fontSize: ".8rem",
-              color: "var(--muted)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
               background: "var(--bg)",
               border: "1px solid var(--border)",
-              borderRadius: 10,
-              padding: ".7rem .9rem",
-              marginBottom: "1rem",
+              borderRadius: 12,
+              padding: "1rem 1.1rem",
+              margin: "0 0 1rem",
             }}
           >
-            🔒 Refunded when they reply · reclaimable by you after{" "}
-            {RESPONSE_WINDOW_HOURS}h · goes to public goods only if they mark it
-            spam.
+            <span style={{ color: "var(--muted)", fontSize: ".9rem" }}>
+              Refundable deposit
+            </span>
+            <span style={{ fontSize: "1.6rem", fontWeight: 700, color: "var(--brass)" }}>
+              {FIXED_DEPOSIT} MON
+            </span>
           </div>
 
-          {isConnected && address && (
-            <div
-              style={{
-                marginBottom: "1rem",
-                background: "var(--bg)",
-                border: "1px solid var(--border)",
-                borderRadius: 10,
-                padding: ".7rem .9rem",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: ".5rem",
-                  flexWrap: "wrap",
-                }}
-              >
-                <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
-                  YOUR WALLET — top it up with MON to pay
-                </span>
-                <span className="mono" style={{ fontSize: ".8rem", color: "var(--green)" }}>
-                  {balance ? Number(formatEther(balance.value)).toFixed(3) : "0.000"} MON
-                </span>
-              </div>
-              <div style={{ display: "flex", gap: ".5rem", alignItems: "center", marginTop: ".5rem" }}>
-                <code
-                  className="mono"
-                  style={{
-                    flex: 1,
-                    minWidth: 160,
-                    fontSize: ".76rem",
-                    overflow: "auto",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {address}
-                </code>
-                <button
-                  className="btn btn-ghost"
-                  style={{ padding: ".45rem .7rem", fontSize: ".8rem" }}
-                  onClick={copyMyAddress}
-                >
-                  {copied ? "Copied ✓" : "Copy"}
-                </button>
-              </div>
-            </div>
-          )}
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              margin: "0 0 1.2rem",
+              color: "var(--muted)",
+              fontSize: ".82rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: ".4rem",
+            }}
+          >
+            <li>🔁 Refunded in full the moment they reply.</li>
+            <li>⏱️ Reclaimable by you after {RESPONSE_WINDOW_HOURS}h if they don&apos;t respond.</li>
+            <li>❤️ Only goes to public goods if they mark it as spam.</li>
+          </ul>
 
           {!isConnected ? (
             <div style={{ textAlign: "center" }}>
@@ -236,40 +164,23 @@ export default function PayPage({
               <ConnectButton />
             </div>
           ) : wrongChain ? (
-            <button className="btn btn-brass" style={{ width: "100%" }} onClick={() => switchChain({ chainId: CHAIN.id })}>
+            <button
+              className="btn btn-brass"
+              style={{ width: "100%" }}
+              onClick={() => switchChain({ chainId: CHAIN.id })}
+            >
               Switch to Monad Testnet
             </button>
-          ) : selfSend ? (
-            <div
-              style={{
-                textAlign: "center",
-                color: "var(--red)",
-                fontSize: ".9rem",
-                border: "1px solid rgba(229,101,122,0.4)",
-                borderRadius: 10,
-                padding: ".8rem",
-              }}
-            >
-              This is your own link — you can&apos;t pay to reach yourself.
-              Connect a different wallet to test as a sender.
-            </div>
           ) : (
             <button
               className="btn btn-brass"
               style={{ width: "100%" }}
-              disabled={
-                isPending ||
-                mining ||
-                (!mid && !message.trim()) ||
-                Number(amount) <= 0
-              }
+              disabled={isPending || mining || (!mid && !message.trim())}
               onClick={send}
             >
               {isPending || mining
                 ? "Locking deposit…"
-                : mid
-                ? `Pay & deliver · lock ${amount} MON`
-                : `Send message · lock ${amount} MON`}
+                : `Pay ${FIXED_DEPOSIT} MON & ${mid ? "deliver" : "send"}`}
             </button>
           )}
 
