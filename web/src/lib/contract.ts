@@ -100,4 +100,31 @@ export const ESCROW_ABI = [
       { name: "deadline", type: "uint256", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "Refunded",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Donated",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "publicGoods", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Reclaimed",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;

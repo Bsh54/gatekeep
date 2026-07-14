@@ -69,7 +69,7 @@ export default function Home() {
           }}
         >
           <Logo />
-          <Link href="/dashboard" className="btn btn-ghost">
+          <Link href="/dashboard" className="btn btn-primary">
             Get started
           </Link>
         </div>

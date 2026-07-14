@@ -5,26 +5,27 @@ import Link from "next/link";
 import { formatEther } from "viem";
 import { useAccount, useBalance, usePublicClient } from "wagmi";
 import { ConnectButton } from "@/components/ConnectButton";
-import { ESCROW_ABI, ESCROW_ADDRESS, EXPLORER, STATUS } from "@/lib/contract";
+import { ESCROW_ABI, ESCROW_ADDRESS, EXPLORER } from "@/lib/contract";
 
+type Settle = { type: "refunded" | "donated" | "reclaimed"; ts: number; txHash: string };
+type MinLog = { args: { id?: bigint }; blockNumber: bigint | null; transactionHash: `0x${string}` | null };
 type Deposit = {
   id: bigint;
   amount: bigint;
   recipient: string;
-  status: number; // index into STATUS
   txHash: string;
-};
-
-const STATUS_VIEW: Record<number, { label: string; color: string }> = {
-  1: { label: "Locked · awaiting reply", color: "var(--accent)" },
-  2: { label: "Refunded to you", color: "var(--green)" },
-  3: { label: "Sent to public goods", color: "var(--muted)" },
-  4: { label: "Reclaimed", color: "var(--green)" },
-  0: { label: "Unknown", color: "var(--muted)" },
+  ts: number; // deposit time (unix seconds)
+  fee: bigint; // network fee paid for the deposit tx
+  settle: Settle | null;
 };
 
 function short(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+function fmtTime(ts: number) {
+  return new Date(ts * 1000).toLocaleString([], {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 export default function ReceiptsPage() {
@@ -39,34 +40,55 @@ export default function ReceiptsPage() {
     if (!address || !client) return;
     setLoading(true);
     try {
-      const logs = await client.getContractEvents({
-        abi: ESCROW_ABI,
-        address: ESCROW_ADDRESS,
-        eventName: "Deposited",
-        args: { sender: address },
-        fromBlock: 0n,
-        toBlock: "latest",
-      });
+      const [deposited, refunded, donated, reclaimed] = await Promise.all([
+        client.getContractEvents({ abi: ESCROW_ABI, address: ESCROW_ADDRESS, eventName: "Deposited", args: { sender: address }, fromBlock: 0n, toBlock: "latest" }),
+        client.getContractEvents({ abi: ESCROW_ABI, address: ESCROW_ADDRESS, eventName: "Refunded", fromBlock: 0n, toBlock: "latest" }),
+        client.getContractEvents({ abi: ESCROW_ABI, address: ESCROW_ADDRESS, eventName: "Donated", fromBlock: 0n, toBlock: "latest" }),
+        client.getContractEvents({ abi: ESCROW_ABI, address: ESCROW_ADDRESS, eventName: "Reclaimed", fromBlock: 0n, toBlock: "latest" }),
+      ]);
+
+      // Cache block timestamps to avoid duplicate calls.
+      const blockTs = new Map<string, number>();
+      const ts = async (bn: bigint | null | undefined) => {
+        if (bn == null) return 0;
+        const k = bn.toString();
+        if (blockTs.has(k)) return blockTs.get(k)!;
+        const b = await client.getBlock({ blockNumber: bn });
+        const t = Number(b.timestamp);
+        blockTs.set(k, t);
+        return t;
+      };
+
+      // Index settlements by id.
+      const settleMap = new Map<string, Settle>();
+      const addSettle = async (logs: readonly MinLog[], type: Settle["type"]) => {
+        for (const l of logs) {
+          const id = l.args.id;
+          if (id === undefined) continue;
+          settleMap.set(id.toString(), { type, ts: await ts(l.blockNumber), txHash: l.transactionHash ?? "" });
+        }
+      };
+      await addSettle(refunded as unknown as MinLog[], "refunded");
+      await addSettle(donated as unknown as MinLog[], "donated");
+      await addSettle(reclaimed as unknown as MinLog[], "reclaimed");
+
       const rows: Deposit[] = [];
-      for (const log of logs) {
+      for (const log of deposited) {
         const a = log.args as { id?: bigint; amount?: bigint; recipient?: string };
         if (a.id === undefined) continue;
-        let status = 1;
+        let fee = 0n;
         try {
-          const m = (await client.readContract({
-            abi: ESCROW_ABI,
-            address: ESCROW_ADDRESS,
-            functionName: "getMessage",
-            args: [a.id],
-          })) as { status: number };
-          status = Number(m.status);
+          const r = await client.getTransactionReceipt({ hash: log.transactionHash! });
+          fee = r.gasUsed * (r.effectiveGasPrice ?? 0n);
         } catch {}
         rows.push({
           id: a.id,
           amount: a.amount ?? 0n,
           recipient: a.recipient ?? "",
-          status,
           txHash: log.transactionHash ?? "",
+          ts: await ts(log.blockNumber),
+          fee,
+          settle: settleMap.get(a.id.toString()) ?? null,
         });
       }
       rows.sort((x, y) => Number(y.id - x.id));
@@ -78,18 +100,15 @@ export default function ReceiptsPage() {
     }
   }, [address, client]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  const totalLocked = deposits.filter((d) => d.status === 1).reduce((s, d) => s + d.amount, 0n);
-  const totalRefunded = deposits.filter((d) => d.status === 2 || d.status === 4).reduce((s, d) => s + d.amount, 0n);
+  const locked = deposits.filter((d) => !d.settle).reduce((s, d) => s + d.amount, 0n);
+  const refundedTotal = deposits.filter((d) => d.settle && d.settle.type !== "donated").reduce((s, d) => s + d.amount, 0n);
+  const totalFees = deposits.reduce((s, d) => s + d.fee, 0n);
 
   return (
     <>
-      <div className="ambient" aria-hidden>
-        <div className="glow" />
-      </div>
+      <div className="ambient" aria-hidden><div className="glow" /></div>
 
       <nav className="glass" style={{ position: "sticky", top: 0, zIndex: 20, borderRadius: 0, borderLeft: 0, borderRight: 0, borderTop: 0 }}>
         <div style={{ maxWidth: 720, margin: "0 auto", padding: ".7rem 1.25rem", height: 60, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -101,7 +120,7 @@ export default function ReceiptsPage() {
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "2rem 1.25rem" }}>
         <h1 style={{ fontSize: "1.6rem", marginBottom: ".4rem" }}>Your deposits</h1>
         <p style={{ color: "var(--muted)", fontSize: ".95rem", margin: "0 0 1.6rem" }}>
-          Every deposit you locked to reach someone, and whether it came back. All verifiable on-chain.
+          Every deposit you locked, when it happened, and whether it came back. All verifiable on-chain.
         </p>
 
         {!isConnected ? (
@@ -111,21 +130,20 @@ export default function ReceiptsPage() {
           </div>
         ) : (
           <>
-            {/* Balance + totals */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: ".8rem", marginBottom: "1.6rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: ".8rem", marginBottom: "1.6rem" }}>
               {[
-                [balance ? `${Number(formatEther(balance.value)).toFixed(3)}` : "0.000", "Wallet balance (MON)", "var(--ink)"],
-                [Number(formatEther(totalLocked)).toFixed(1), "Locked right now (MON)", "var(--accent)"],
-                [Number(formatEther(totalRefunded)).toFixed(1), "Refunded to you (MON)", "var(--green)"],
+                [balance ? Number(formatEther(balance.value)).toFixed(3) : "0.000", "Wallet balance (MON)", "var(--ink)"],
+                [Number(formatEther(locked)).toFixed(1), "Locked now (MON)", "var(--accent)"],
+                [Number(formatEther(refundedTotal)).toFixed(1), "Refunded (MON)", "var(--green)"],
+                [Number(formatEther(totalFees)).toFixed(5), "Network fees (MON)", "var(--muted)"],
               ].map(([v, l, c]) => (
                 <div key={l} className="card" style={{ padding: "1rem 1.1rem" }}>
-                  <div className="font-head" style={{ fontSize: "1.6rem", color: c }}>{v}</div>
-                  <div style={{ fontSize: ".78rem", color: "var(--muted)", marginTop: ".25rem" }}>{l}</div>
+                  <div className="font-head" style={{ fontSize: "1.5rem", color: c }}>{v}</div>
+                  <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".25rem" }}>{l}</div>
                 </div>
               ))}
             </div>
 
-            {/* Deposits list */}
             {loading ? (
               <div className="card" style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>Loading…</div>
             ) : deposits.length === 0 ? (
@@ -133,35 +151,54 @@ export default function ReceiptsPage() {
                 No deposits yet. When you pay to reach someone, it shows up here.
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: ".7rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: ".8rem" }}>
                 {deposits.map((d) => {
-                  const meta = STATUS_VIEW[d.status] ?? STATUS_VIEW[0];
+                  const settled = d.settle;
+                  const settleLabel = !settled
+                    ? { text: "Locked · awaiting reply", color: "var(--accent)" }
+                    : settled.type === "donated"
+                    ? { text: "Sent to public goods", color: "var(--muted)" }
+                    : { text: "Refunded to you", color: "var(--green)" };
                   return (
-                    <div key={d.id.toString()} className="card" style={{ padding: "1rem 1.1rem" }}>
+                    <div key={d.id.toString()} className="card" style={{ padding: "1.1rem 1.2rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
-                        <div>
-                          <div className="font-head" style={{ fontSize: "1.1rem" }}>
-                            {Number(formatEther(d.amount)).toFixed(1)} MON
-                          </div>
-                          <div className="mono" style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".2rem" }}>
-                            to {short(d.recipient)} · {STATUS[d.status] ?? "—"}
-                          </div>
+                        <div className="font-head" style={{ fontSize: "1.15rem" }}>
+                          {Number(formatEther(d.amount)).toFixed(1)} MON
+                          <span className="mono" style={{ fontSize: ".72rem", color: "var(--muted)", fontWeight: 400, marginLeft: ".5rem" }}>
+                            to {short(d.recipient)}
+                          </span>
                         </div>
-                        <span className="pill" style={{ color: meta.color, borderColor: meta.color === "var(--muted)" ? "var(--border)" : "rgba(76,141,255,.3)" }}>
-                          {meta.label}
-                        </span>
+                        <span className="pill" style={{ color: settleLabel.color }}>{settleLabel.text}</span>
                       </div>
-                      {d.txHash && (
-                        <a
-                          href={`${EXPLORER}/tx/${d.txHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mono"
-                          style={{ display: "inline-block", marginTop: ".7rem", fontSize: ".78rem", color: "var(--accent)" }}
-                        >
-                          Verify on-chain ↗
-                        </a>
-                      )}
+
+                      {/* Timeline / log */}
+                      <div style={{ marginTop: ".9rem", display: "flex", flexDirection: "column", gap: ".45rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: ".5rem", fontSize: ".82rem" }}>
+                          <span style={{ color: "var(--muted)" }}>Deposited · {fmtTime(d.ts)}</span>
+                          <span className="mono" style={{ color: "var(--muted)" }}>fee {Number(formatEther(d.fee)).toFixed(6)} MON</span>
+                        </div>
+                        {settled && (
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: ".5rem", fontSize: ".82rem" }}>
+                            <span style={{ color: settleLabel.color }}>
+                              {settled.type === "donated" ? "Donated" : "Refunded"} · {fmtTime(settled.ts)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* On-chain links */}
+                      <div style={{ marginTop: ".8rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                        {d.txHash && (
+                          <a href={`${EXPLORER}/tx/${d.txHash}`} target="_blank" rel="noreferrer" className="mono" style={{ fontSize: ".76rem", color: "var(--accent)" }}>
+                            Deposit tx ↗
+                          </a>
+                        )}
+                        {settled?.txHash && (
+                          <a href={`${EXPLORER}/tx/${settled.txHash}`} target="_blank" rel="noreferrer" className="mono" style={{ fontSize: ".76rem", color: "var(--accent)" }}>
+                            {settled.type === "donated" ? "Donation" : "Refund"} tx ↗
+                          </a>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
