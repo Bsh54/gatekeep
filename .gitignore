@@ -1,0 +1,22 @@
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/.env*
+!web/.env.example
+
+# Secrets & local
+.env
+.env.*
+*.local
+deployments.local.json
+
+# OS / editor
+.DS_Store
+*.log
