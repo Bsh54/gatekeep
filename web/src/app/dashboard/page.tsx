@@ -334,7 +334,7 @@ export default function Dashboard() {
   return (
     <>
       {/* TOPBAR */}
-      <nav className="glass" style={{ position: "sticky", top: 0, zIndex: 20, borderRadius: 0, borderLeft: 0, borderRight: 0, borderTop: 0 }}>
+      <nav className="topbar" style={{ position: "sticky", top: 0, zIndex: 20 }}>
         <div style={{ padding: ".7rem 1.5rem", height: 64, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: "1rem" }}>
           <Link href="/" style={{ justifySelf: "start", display: "inline-flex" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}

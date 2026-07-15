@@ -110,7 +110,7 @@ export default function ReceiptsPage() {
     <>
       <div className="ambient" aria-hidden><div className="glow" /></div>
 
-      <nav className="glass" style={{ position: "sticky", top: 0, zIndex: 20, borderRadius: 0, borderLeft: 0, borderRight: 0, borderTop: 0 }}>
+      <nav className="topbar" style={{ position: "sticky", top: 0, zIndex: 20 }}>
         <div style={{ maxWidth: 720, margin: "0 auto", padding: ".7rem 1.25rem", height: 60, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Link href="/" style={{ display: "inline-flex" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}

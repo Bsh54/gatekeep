@@ -19,15 +19,11 @@ export default function Home() {
 
       {/* ---------- NAV ---------- */}
       <nav
-        className="glass"
+        className="topbar"
         style={{
           position: "sticky",
           top: 0,
           zIndex: 20,
-          borderRadius: 0,
-          borderLeft: 0,
-          borderRight: 0,
-          borderTop: 0,
         }}
       >
         <div
