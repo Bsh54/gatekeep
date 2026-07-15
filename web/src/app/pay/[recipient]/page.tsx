@@ -117,8 +117,9 @@ export default function PayPage({
       {/* NAV */}
       <nav className="glass" style={{ position: "sticky", top: 0, zIndex: 20, borderRadius: 0, borderLeft: 0, borderRight: 0, borderTop: 0 }}>
         <div style={{ maxWidth: 620, margin: "0 auto", padding: ".7rem 1.25rem", height: 60, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Link href="/" className="font-head" style={{ fontWeight: 700, fontSize: "1.05rem" }}>
-            Gatekeep
+          <Link href="/" style={{ display: "inline-flex" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Gatekeep" style={{ height: 28, width: "auto", display: "block" }} />
           </Link>
           <ConnectButton />
         </div>

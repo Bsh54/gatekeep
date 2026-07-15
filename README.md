@@ -1,4 +1,9 @@
-# 📮 Gatekeep
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/logo.png">
+    <img src="web/public/logo-light.png" alt="Gatekeep" width="360">
+  </picture>
+</p>
 
 **A pay-to-reach toll for your inbox, settled on Monad.**
 

@@ -3,37 +3,10 @@ import { EXPLORER, ESCROW_ADDRESS } from "@/lib/contract";
 
 const DEPOSIT = "0.5 MON";
 
-/* Simple geometric wordmark. */
 function Logo() {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: ".55rem" }}>
-      <span
-        aria-hidden
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 6,
-          border: "2px solid var(--accent)",
-          position: "relative",
-          display: "inline-block",
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: 2,
-            bottom: 2,
-            width: 2,
-            marginLeft: -1,
-            background: "var(--accent)",
-          }}
-        />
-      </span>
-      <strong className="font-head" style={{ fontSize: "1.12rem" }}>
-        Gatekeep
-      </strong>
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/logo.png" alt="Gatekeep" style={{ height: 30, width: "auto", display: "block" }} />
   );
 }
 
